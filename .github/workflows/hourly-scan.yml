@@ -1,0 +1,102 @@
+name: Hourly Steam Free-to-Keep Scan & Free GitHub Pages Deploy
+
+# 100% $0.00/month zero-card cloud operation on a public GitHub repository:
+# - Runs every 60 minutes independently of your laptop, phone, or browser
+# - Persists SQLite WAL database permanently on the `tracker-data` branch
+# - Sends independent phone push alerts via Telegram and/or ntfy.sh (encrypted GitHub Secrets)
+# - Publishes updated HTTPS PWA dashboard, JSON APIs, and all Cycle/Historical PDFs to GitHub Pages
+on:
+  schedule:
+    - cron: "5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: steam-ftk-hourly-scan
+  cancel-in-progress: false
+
+jobs:
+  scan-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+
+      - name: Restore persistent SQLite database from tracker-data branch
+        run: |
+          mkdir -p data/reports data/backups
+          if git ls-remote --exit-code --heads origin tracker-data >/dev/null 2>&1; then
+            git fetch origin tracker-data:tracker-data
+            git checkout tracker-data -- data/steam_tracker.db || true
+            git reset HEAD data/steam_tracker.db || true
+          fi
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Execute autonomous Steam India (IN/INR) hourly scan
+        env:
+          TARGET_REGION: IN
+          STEAM_COUNTRY_CODE: in
+          DEFAULT_CURRENCY: INR
+          TIMEZONE: Asia/Kolkata
+          DATABASE_PATH: data/steam_tracker.db
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python -m backend.cli run-scan || true
+
+      - name: Build HTTPS PWA + JSON API + Cycle/Historical PDFs into site/
+        env:
+          TARGET_REGION: IN
+          STEAM_COUNTRY_CODE: in
+          DEFAULT_CURRENCY: INR
+          TIMEZONE: Asia/Kolkata
+          DATABASE_PATH: data/steam_tracker.db
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python -m backend.cli publish-static --out site
+
+      - name: Persist updated SQLite database to tracker-data branch
+        run: |
+          git config user.name "steam-ftk-bot"
+          git config user.email "actions@users.noreply.github.com"
+          cp data/steam_tracker.db /tmp/steam_tracker.db
+          if git ls-remote --exit-code --heads origin tracker-data >/dev/null 2>&1; then
+            git checkout tracker-data
+          else
+            git checkout --orphan tracker-data
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+          mkdir -p data
+          cp /tmp/steam_tracker.db data/steam_tracker.db
+          git add -f data/steam_tracker.db
+          git commit -m "Hourly Steam FTK scan DB update $(date -u +'%Y-%m-%dT%H:%M:%SZ')" || echo "No DB changes"
+          git push origin tracker-data
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy HTTPS PWA to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

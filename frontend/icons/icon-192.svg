@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <rect width="192" height="192" rx="38" fill="#0f172a"/>
+  <circle cx="96" cy="96" r="64" fill="none" stroke="#38bdf8" stroke-width="10"/>
+  <path d="M62 104 L88 126 L134 70" fill="none" stroke="#22c55e" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="96" y="168" text-anchor="middle" fill="#94a3b8" font-family="system-ui,sans-serif" font-size="18" font-weight="700">FTK</text>
+</svg>

@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Steam Free-to-Keep Tracker</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="/static/icons/icon-192.svg" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Sidebar Navigation (All 10 Required Views) -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark">FTK</div>
+        <div>
+          <h1>Steam FTK Tracker</h1>
+          <span>India (IN / INR / IST)</span>
+        </div>
+      </div>
+
+      <nav class="nav-list" id="navList">
+        <button class="nav-btn active" data-view="home">
+          <span>1. Home / Live Monitor</span>
+        </button>
+        <button class="nav-btn" data-view="verified">
+          <span>2. Verified Free-to-Keep</span>
+          <span class="nav-badge green" id="badgeVerified">0</span>
+        </button>
+        <button class="nav-btn" data-view="quarantined">
+          <span>3. Quarantined</span>
+          <span class="nav-badge amber" id="badgeQuarantined">0</span>
+        </button>
+        <button class="nav-btn" data-view="rejected">
+          <span>4. Rejected</span>
+          <span class="nav-badge" id="badgeRejected">0</span>
+        </button>
+        <button class="nav-btn" data-view="current-inventory">
+          <span>5. Current Game Inventory</span>
+        </button>
+        <button class="nav-btn" data-view="historical-inventory">
+          <span>6. Historical Game Inventory</span>
+          <span class="nav-badge" id="badgeHistorical">0</span>
+        </button>
+        <button class="nav-btn" data-view="ledger">
+          <span>7. Hourly Scan Ledger</span>
+          <span class="nav-badge" id="badgeCycles">0</span>
+        </button>
+        <button class="nav-btn" data-view="pdf-archive">
+          <span>8. PDF Report Archive</span>
+        </button>
+        <button class="nav-btn" data-view="notifications">
+          <span>9. Notifications</span>
+        </button>
+        <button class="nav-btn" data-view="settings">
+          <span>10. Settings</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div>24/7 Cloud Background Engine</div>
+        <div id="sidebarSyncInfo" style="margin-top:4px;">Not synced yet</div>
+      </div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <div class="main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle menu">Menu</button>
+          <span class="pill" id="pillConn"><span class="dot"></span> Checking...</span>
+          <span class="pill" id="pillWorker">Worker: AWAITING_FIRST_SCAN</span>
+          <span class="pill blue" id="pillCycle">Cycle #0</span>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn sm" id="btnInstallPwa" style="display:none;">Install App</button>
+          <button class="btn sm" id="btnSyncNow">Sync Now</button>
+          <button class="btn sm primary" id="btnHistoricalPdf">Full Audit PDF</button>
+        </div>
+      </header>
+
+      <!-- Explicit Offline / Cached Banner (Never claims cached data is live) -->
+      <div class="offline-banner" id="offlineBanner">
+        <div>
+          <strong>Offline / Cached Mode:</strong> Displaying previously synchronized local IndexedDB data.
+          <span id="cacheAgeText">Cache age: unknown.</span> Data is NOT live until reconnected.
+        </div>
+        <button class="btn sm" id="btnRetryConn">Retry Connection</button>
+      </div>
+
+      <main class="content">
+        <!-- VIEW 1: HOME / LIVE MONITOR -->
+        <section class="view-panel active" id="view-home">
+          <div class="section-header">
+            <h2>Home &amp; Live Background Monitor</h2>
+            <span class="pill" id="liveStreamBadge">Stream: Connecting...</span>
+          </div>
+
+          <!-- Main Status Panel -->
+          <div class="grid-status">
+            <div class="card">
+              <div class="card-title">Connection &amp; Freshness</div>
+              <div class="card-value" id="stOnline">--</div>
+              <div class="card-sub" id="stLastSync">Last sync: Never</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Background Worker</div>
+              <div class="card-value" id="stWorkerStatus">--</div>
+              <div class="card-sub" id="stCurrentSource">Source: Idle</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Current Cycle</div>
+              <div class="card-value" id="stCycleNum">#0</div>
+              <div class="card-sub" id="stScanId">Scan ID: None</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Next Scheduled Scan</div>
+              <div class="card-value" id="stCountdown">--:--</div>
+              <div class="card-sub" id="stNextAt">Scheduled: Unknown</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Last Completed / Success</div>
+              <div class="card-value" style="font-size:14px;" id="stLastScan">Never</div>
+              <div class="card-sub" id="stLastSuccess">Last success: Never</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Target Region &amp; Operation</div>
+              <div class="card-value" style="font-size:15px;" id="stRegion">IN (INR / IST)</div>
+              <div class="card-sub" id="stCurrentOp">Waiting for worker telemetry</div>
+            </div>
+          </div>
+
+          <!-- Aggregate Statistics -->
+          <div class="grid-stats">
+            <div class="card"><div class="card-title">Completed Cycles</div><div class="card-value" id="statCycles">0</div></div>
+            <div class="card"><div class="card-title">Pages Retrieved</div><div class="card-value" id="statPages">0</div></div>
+            <div class="card"><div class="card-title">Candidates Found</div><div class="card-value" id="statCandidates">0</div></div>
+            <div class="card"><div class="card-title">Games Checked</div><div class="card-value" id="statChecked">0</div></div>
+            <div class="card"><div class="card-title">Verified FTK</div><div class="card-value" style="color:var(--green);" id="statVerified">0</div></div>
+            <div class="card"><div class="card-title">Quarantined</div><div class="card-value" style="color:var(--amber);" id="statQuarantined">0</div></div>
+            <div class="card"><div class="card-title">Rejected</div><div class="card-value" id="statRejected">0</div></div>
+            <div class="card"><div class="card-title">Alerts Delivered</div><div class="card-value" id="statNotifs">0</div></div>
+            <div class="card"><div class="card-title">Request Errors</div><div class="card-value" style="color:var(--red);" id="statErrors">0</div></div>
+          </div>
+
+          <!-- Genuine Live Background Scanning Monitor -->
+          <div class="monitor-grid">
+            <div class="card">
+              <div class="card-title">Live Steam Scanning Telemetry (Real Worker Counters)</div>
+              <div class="kv-grid">
+                <div class="kv-item"><div class="kv-label">Scan Start (IST)</div><div class="kv-val" id="lmStart">--</div></div>
+                <div class="kv-item"><div class="kv-label">Elapsed Time</div><div class="kv-val" id="lmElapsed">--</div></div>
+                <div class="kv-item"><div class="kv-label">Steam Search Reqs</div><div class="kv-val" id="lmSearchReqs">0</div></div>
+                <div class="kv-item"><div class="kv-label">Pages (Curr / Total)</div><div class="kv-val" id="lmPages">0 / UNKNOWN</div></div>
+                <div class="kv-item"><div class="kv-label">Candidates / Unique IDs</div><div class="kv-val" id="lmCands">0 / 0</div></div>
+                <div class="kv-item"><div class="kv-label">AppDetails Reqs</div><div class="kv-val" id="lmAppDetails">0</div></div>
+                <div class="kv-item"><div class="kv-label">Waiting Verification</div><div class="kv-val" id="lmWaiting">0</div></div>
+                <div class="kv-item"><div class="kv-label">Secondary Reqs</div><div class="kv-val" id="lmSecondary">0</div></div>
+                <div class="kv-item"><div class="kv-label">OK / Fail / Retries</div><div class="kv-val" id="lmReqHealth">0 / 0 / 0</div></div>
+              </div>
+
+              <div class="card-title" style="margin-top:16px;">Individual Game Verification Inspector</div>
+              <div class="kv-item" id="lmCurrentGame">
+                No game currently being checked (Worker is idle).
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Live Worker Activity Console (Chronological Real Events)</div>
+              <div class="console-box" id="liveConsole">
+                <div class="console-line" style="color:var(--muted);">Waiting for background worker events...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Verified Free-to-Keep Cards on Home -->
+          <div class="section-header">
+            <h2>Active Verified Direct Steam Free-to-Keep</h2>
+          </div>
+          <div class="games-grid" id="homeVerifiedGrid"></div>
+
+          <!-- Recent Hourly Activity -->
+          <div class="section-header" style="margin-top:26px;">
+            <h2>Latest Hourly Scan Activity</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cycle</th>
+                  <th>Timestamp (IST)</th>
+                  <th>Status</th>
+                  <th>Pages</th>
+                  <th>Checked</th>
+                  <th>V / Q / R</th>
+                  <th>Duration</th>
+                  <th>Report</th>
+                </tr>
+              </thead>
+              <tbody id="homeRecentCyclesBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- VIEW 2: VERIFIED FREE-TO-KEEP -->
+        <section class="view-panel" id="view-verified">
+          <div class="section-header">
+            <h2>Category A: Verified Direct Steam Free-to-Keep</h2>
+          </div>
+          <div class="games-grid" id="verifiedGrid"></div>
+        </section>
+
+        <!-- VIEW 3: QUARANTINED -->
+        <section class="view-panel" id="view-quarantined">
+          <div class="section-header">
+            <h2>Category B: Quarantined Opportunities</h2>
+          </div>
+          <p style="color:var(--muted);margin-top:0;">Third-party key giveaways, missing secondary corroboration, or conflicting data. Kept strictly separate from Verified Direct Steam Free-to-Keep.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Game Title</th>
+                  <th>App ID</th>
+                  <th>Orig / Promo</th>
+                  <th>Source</th>
+                  <th>Quarantine Reason</th>
+                  <th>Last Checked (IST)</th>
+                  <th>Evidence</th>
+                </tr>
+              </thead>
+              <tbody id="quarantinedBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- VIEW 4: REJECTED -->
+        <section class="view-panel" id="view-rejected">
+          <div class="section-header">
+            <h2>Category C: Rejected Candidates</h2>
+          </div>
+          <p style="color:var(--muted);margin-top:0;">Permanent F2P, DLC, soundtracks, demos, trials, free weekends, expired offers, non-zero paid listings, or invalid IDs.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Game Title</th>
+                  <th>App ID</th>
+                  <th>Type</th>
+                  <th>Orig / Current</th>
+                  <th>Exact Rejection Reason</th>
+                  <th>Checked (IST)</th>
+                  <th>Evidence</th>
+                </tr>
+              </thead>
+              <tbody id="rejectedBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- VIEW 5: CURRENT GAME INVENTORY -->
+        <section class="view-panel" id="view-current-inventory">
+          <div class="section-header">
+            <h2>Current Active Game Inventory</h2>
+          </div>
+          <div class="games-grid" id="currentInventoryGrid"></div>
+        </section>
+
+        <!-- VIEW 6: HISTORICAL GAME INVENTORY -->
+        <section class="view-panel" id="view-historical-inventory">
+          <div class="section-header">
+            <h2>Complete Historical Game Inventory</h2>
+            <div class="toolbar" style="margin:0;">
+              <input class="input" id="histSearch" placeholder="Search title or App ID..." />
+              <select class="select" id="histStatusFilter">
+                <option value="">All Statuses</option>
+                <option value="VERIFIED">VERIFIED</option>
+                <option value="EXPIRED">EXPIRED</option>
+                <option value="QUARANTINED">QUARANTINED</option>
+                <option value="REJECTED">REJECTED</option>
+              </select>
+              <button class="btn sm" id="btnExportGamesCsv">Export CSV</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Game</th>
+                  <th>App ID</th>
+                  <th>Status</th>
+                  <th>Orig / Promo</th>
+                  <th>First Seen (IST)</th>
+                  <th>Last Verified (IST)</th>
+                  <th>Claimed?</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="historicalBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- VIEW 7: HOURLY SCAN LEDGER -->
+        <section class="view-panel" id="view-ledger">
+          <div class="section-header">
+            <h2>Permanent Hourly Audit Ledger</h2>
+            <div class="toolbar" style="margin:0;">
+              <input class="input" id="ledgerSearch" placeholder="Filter cycle # or scan ID..." />
+              <input class="input" type="date" id="ledgerDate" />
+              <select class="select" id="ledgerStatus">
+                <option value="">All Outcomes</option>
+                <option value="SUCCESS_WITH_RESULTS">SUCCESS_WITH_RESULTS</option>
+                <option value="SUCCESS_NO_RESULTS">SUCCESS_NO_RESULTS</option>
+                <option value="COMPLETED_WITH_ERRORS">COMPLETED_WITH_ERRORS</option>
+                <option value="FAILED">FAILED</option>
+              </select>
+              <button class="btn sm" id="btnExportLedgerCsv">Export CSV</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cycle</th>
+                  <th>Scan ID</th>
+                  <th>Started (IST)</th>
+                  <th>Status</th>
+                  <th>Pages</th>
+                  <th>Cands / Chk</th>
+                  <th>V / Q / R</th>
+                  <th>Errors / Retries</th>
+                  <th>Notif</th>
+                  <th>Reports &amp; Backup</th>
+                </tr>
+              </thead>
+              <tbody id="ledgerBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- VIEW 8: PDF REPORT ARCHIVE -->
+        <section class="view-panel" id="view-pdf-archive">
+          <div class="section-header">
+            <h2>Hourly PDF Report Archive</h2>
+            <div class="toolbar" style="margin:0;">
+              <input class="input" id="pdfSearch" placeholder="Search cycle # or date..." />
+              <button class="btn primary sm" id="btnViewFullHistoricalPdf">Open Full Historical PDF</button>
+              <button class="btn sm" id="btnDownloadFullHistoricalPdf">Download Historical PDF</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cycle #</th>
+                  <th>Scan ID</th>
+                  <th>Date &amp; Time (IST)</th>
+                  <th>Outcome</th>
+                  <th>Verified</th>
+                  <th>PDF Controls</th>
+                </tr>
+              </thead>
+              <tbody id="pdfArchiveBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- VIEW 9: NOTIFICATIONS -->
+        <section class="view-panel" id="view-notifications">
+          <div class="section-header">
+            <h2>Phone Notification Delivery History</h2>
+          </div>
+          <p style="color:var(--muted);margin-top:0;">Independent per-provider outbox tracking for ntfy.sh (12h free cache via FCM) and Telegram Bot API (persistent cloud chat history). Secrets stay strictly on the server.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time (IST)</th>
+                  <th>Cycle</th>
+                  <th>Game</th>
+                  <th>Class</th>
+                  <th>Provider</th>
+                  <th>Status</th>
+                  <th>Attempts</th>
+                  <th>HTTP / Error</th>
+                </tr>
+              </thead>
+              <tbody id="notificationsBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- VIEW 10: SETTINGS -->
+        <section class="view-panel" id="view-settings">
+          <div class="section-header">
+            <h2>Settings, Backups &amp; Backend Connection</h2>
+          </div>
+          <div class="monitor-grid">
+            <div class="card">
+              <div class="card-title">Backend Server &amp; Manual Actions</div>
+              <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">
+                <label style="font-size:13px;color:var(--muted);">Backend API Base URL (leave empty for same-origin hosted PWA)</label>
+                <input class="input" id="cfgApiBase" placeholder="https://your-tracker-host.example.com" />
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <button class="btn primary sm" id="btnSaveApiBase">Save &amp; Re-Sync</button>
+                  <button class="btn sm" id="btnDownloadFullBackup">Download Full JSON Backup</button>
+                  <button class="btn sm" id="btnClearLocalCache">Reset Local IndexedDB Cache</button>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-title">Server Configuration (Read-Only Safe View)</div>
+              <div class="kv-grid" id="serverSettingsGrid"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- MODAL 1: AUTOMATIC CATCH-UP POPUP -->
+  <div class="modal-backdrop" id="catchupModal">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 style="margin:0;">New Activity Since Your Last Visit</h3>
+        <button class="btn sm" id="btnCloseCatchup">Dismiss &amp; Acknowledge</button>
+      </div>
+      <div class="modal-body" id="catchupBody"></div>
+      <div class="modal-foot">
+        <button class="btn primary" id="btnAckCatchup">Acknowledge &amp; Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: INDIVIDUAL / HISTORICAL PDF POP-UP VIEWER -->
+  <div class="modal-backdrop" id="pdfModal">
+    <div class="modal" style="max-width:1020px;">
+      <div class="modal-head">
+        <h3 style="margin:0;" id="pdfModalTitle">Audit PDF Report</h3>
+        <div style="display:flex;gap:8px;">
+          <a class="btn primary sm" id="pdfModalDownload" href="#" download>Download / Save PDF</a>
+          <button class="btn sm" id="btnClosePdf">Close</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <iframe class="pdf-frame" id="pdfFrame" title="Audit PDF Viewer"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: 10-GATE VALIDATION EVIDENCE INSPECTOR -->
+  <div class="modal-backdrop" id="gatesModal">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 style="margin:0;" id="gatesModalTitle">10-Gate Validation Evidence</h3>
+        <button class="btn sm" id="btnCloseGates">Close</button>
+      </div>
+      <div class="modal-body" id="gatesModalBody"></div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

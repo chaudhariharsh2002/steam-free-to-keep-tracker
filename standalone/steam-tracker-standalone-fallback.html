@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Steam Free-to-Keep Tracker — Standalone Fallback Viewer</title>
+  <style>
+    :root { --bg:#0b1120; --surface:#111827; --border:#263348; --text:#f1f5f9; --muted:#94a3b8; --green:#22c55e; --amber:#f59e0b; --accent:#38bdf8; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Inter,system-ui,sans-serif; background:var(--bg); color:var(--text); padding:20px; line-height:1.5; }
+    .wrap { max-width:1100px; margin:0 auto; }
+    .notice { background:rgba(245,158,11,0.14); border:1px solid rgba(245,158,11,0.45); color:#fde68a; border-radius:10px; padding:14px 16px; margin-bottom:18px; font-size:13.5px; }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:16px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    input, button { padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:#1e293b; color:var(--text); font-size:13px; }
+    button.primary { background:#0284c7; border-color:#38bdf8; cursor:pointer; font-weight:600; }
+    table { width:100%; border-collapse:collapse; font-size:13px; margin-top:10px; }
+    th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); }
+    th { color:var(--muted); font-size:11.5px; text-transform:uppercase; }
+    a { color:var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1 style="margin:0 0 10px;">Steam Free-to-Keep Tracker — Standalone Local HTML Fallback</h1>
+    <div class="notice">
+      <strong>Important Capability Distinction:</strong> This single local HTML file is an offline/portable viewer.
+      Opening a local <code>file://</code> HTML file <strong>cannot</strong> independently run 24/7 cloud scanning,
+      register a PWA Service Worker, or dispatch background phone push notifications.
+      For full 24/7 autonomous tracking and Android PWA installation, use the hosted HTTPS application served by
+      <code>backend/server.py</code>. Use this fallback to connect to your hosted backend URL or inspect an exported JSON backup file offline.
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <input id="apiUrl" style="flex:1;min-width:240px;" placeholder="Hosted Backend URL (e.g. https://your-app.onrender.com)" />
+        <button class="primary" id="btnFetch">Fetch Live Data from Backend</button>
+        <label style="cursor:pointer;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:#1e293b;font-size:13px;">
+          Load JSON Backup File
+          <input type="file" id="fileBackup" accept=".json" style="display:none;" />
+        </label>
+      </div>
+      <div id="statusLine" style="margin-top:10px;font-size:12.5px;color:var(--muted);">No data loaded yet.</div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 8px;font-size:17px;">Verified Free-to-Keep &amp; Historical Games</h2>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Title</th><th>App ID</th><th>Status</th><th>Original</th><th>Promo</th><th>Steam Link</th></tr></thead>
+          <tbody id="gamesTbody"><tr><td colspan="6" style="color:var(--muted);">Load a backup or connect to your backend.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 8px;font-size:17px;">Hourly Scan Ledger</h2>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Cycle</th><th>Scan ID</th><th>Started (IST)</th><th>Status</th><th>Verified / Quar / Rej</th></tr></thead>
+          <tbody id="cyclesTbody"><tr><td colspan="5" style="color:var(--muted);">No scan cycles loaded.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <script>
+    function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+    function renderData(games, cycles, label){
+      document.getElementById("statusLine").textContent = label;
+      document.getElementById("gamesTbody").innerHTML = (games||[]).length
+        ? games.map(g=>`<tr><td><strong>${esc(g.title)}</strong></td><td>${esc(g.app_id||"N/A")}</td><td>${esc(g.current_status)}</td><td>${esc(g.original_price_formatted)}</td><td>${esc(g.promotional_price_formatted)}</td><td><a href="${esc(g.claim_url)}" target="_blank" rel="noopener">Open</a></td></tr>`).join("")
+        : `<tr><td colspan="6" style="color:var(--muted);">No games in dataset.</td></tr>`;
+      document.getElementById("cyclesTbody").innerHTML = (cycles||[]).length
+        ? cycles.map(c=>`<tr><td>#${esc(c.cycle_number)}</td><td>${esc(c.scan_id)}</td><td>${esc(c.started_at_ist)}</td><td>${esc(c.status)}</td><td>${c.verified_count||0} / ${c.quarantined_count||0} / ${c.rejected_count||0}</td></tr>`).join("")
+        : `<tr><td colspan="5" style="color:var(--muted);">No cycles in dataset.</td></tr>`;
+    }
+    document.getElementById("btnFetch").addEventListener("click", async () => {
+      const base = document.getElementById("apiUrl").value.trim().replace(/\/+$/, "");
+      if (!base) return;
+      try {
+        const resp = await fetch(`${base}/api/v1/sync?since_cycle=0&client_id=standalone-fallback`);
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        const data = await resp.json();
+        renderData(data.historical_games, data.missed_cycles, `Loaded live snapshot from ${base} at ${data.synced_at_ist}`);
+      } catch (err) {
+        document.getElementById("statusLine").textContent = `Connection failed: ${err.message}`;
+      }
+    });
+    document.getElementById("fileBackup").addEventListener("change", (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          renderData(data.games_inventory || [], data.scan_cycles || [], `Loaded offline backup (${f.name}), exported ${data.exported_at_ist || data.exported_at_utc || "unknown"}`);
+        } catch (err) {
+          document.getElementById("statusLine").textContent = `Invalid JSON backup: ${err.message}`;
+        }
+      };
+      reader.readAsText(f);
+    });
+  </script>
+</body>
+</html>
