@@ -1,10 +1,5 @@
 name: Hourly Steam Free-to-Keep Scan & Free GitHub Pages Deploy
 
-# 100% $0.00/month zero-card cloud operation on a public GitHub repository:
-# - Runs every 60 minutes independently of your laptop, phone, or browser
-# - Persists SQLite WAL database permanently on the `tracker-data` branch
-# - Sends independent phone push alerts via Telegram and/or ntfy.sh (encrypted GitHub Secrets)
-# - Publishes updated HTTPS PWA dashboard, JSON APIs, and all Cycle/Historical PDFs to GitHub Pages
 on:
   schedule:
     - cron: "5 * * * *"
@@ -20,12 +15,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  scan-and-publish:
+  scan-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout repository code
         uses: actions/checkout@v4
@@ -96,6 +88,17 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
+
+  deploy:
+    needs: scan-and-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Wait for artifact indexing
+        run: sleep 10
 
       - name: Deploy HTTPS PWA to GitHub Pages
         id: deployment
